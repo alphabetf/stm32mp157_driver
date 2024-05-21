@@ -1,5 +1,7 @@
+#include "asm-generic/errno.h"
 #include "asm-generic/gpio.h"
 #include "asm/delay.h"
+#include "linux/jiffies.h"
 #include <linux/module.h>
 #include <linux/poll.h>
 #include <linux/fs.h>
@@ -98,6 +100,8 @@ static irqreturn_t sr04_isr(int irq, void *dev_id)
 			printk("missing rising interrupt\n");
 			return IRQ_HANDLED;
 		}
+		/* stop timer */
+		del_timer(&gpios_sr04[1].sr04_timer);
 		time = ktime_get_ns()-rising_time; 
 		rising_time = 0;
 		put_key(time);
@@ -182,13 +186,12 @@ static int sr04_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static void sr04_timer_timeout_func(unsigned long data)
+static void sr04_timer_timeout_func(struct timer_list* timer)
 {
 	put_key(-1);
-	wake_up_interruptible(&gpio_wait);
-	kill_fasync(&button_fasync, SIGIO, POLL_IN);
+	wake_up_interruptible(&sr04_wait);
+	kill_fasync(&g_sr04_fasync, SIGIO, POLL_IN);
 }
-
 
 static const struct file_operations sr04_fop_drv = {
 	.owner		= THIS_MODULE,
@@ -216,7 +219,9 @@ static int sr04_init(void)
 	if(err){
 		printk("request_irq err!!!, %d", err);
 	}
-	setup_timer(&gpios_sr04[1].sr04_timer, sr04_timer_timeout_func, (unsigned long)&gpios_sr04[1]);
+	timer_setup(&gpios_sr04[1].sr04_timer, sr04_timer_timeout_func, (unsigned long)&gpios_sr04[1]);
+	gpios_sr04[1].sr04_timer.expires = ~0;
+	add_timer(&gpios_sr04[1].sr04_timer);
 
 	/* register file_operations */
 	major = register_chrdev(0, "sr04", &sr04_fop_drv);  /* create divce driver */
@@ -245,7 +250,7 @@ static void sr04_exit(void)
 	del_timer(&gpios_sr04[1].sr04_timer);
 }
 
-module_init(sr04_init)
+module_init(sr04_init);
 module_exit(sr04_exit);
 MODULE_LICENSE("GPL");
 
