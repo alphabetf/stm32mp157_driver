@@ -39,6 +39,7 @@ struct sr04_desc{
 	int irq;
     char *name;
     int num;
+	struct timer_list sr04_timer;
 } ;
 
 /* trig:PA5 echo:PA13 */
@@ -117,6 +118,8 @@ static long sr04_ioctl(struct file *filp, unsigned int command, unsigned long ar
 			gpio_set_value(gpios_sr04[0].gpio, 1);
 			udelay(20);
 			gpio_set_value(gpios_sr04[0].gpio, 0);
+			/* start timer */
+			mod_timer(&gpios_sr04[1].sr04_timer, jiffies + msecs_to_jiffies(50)); 
 		}
 	}
 
@@ -179,6 +182,14 @@ static int sr04_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
+static void sr04_timer_timeout_func(unsigned long data)
+{
+	put_key(-1);
+	wake_up_interruptible(&gpio_wait);
+	kill_fasync(&button_fasync, SIGIO, POLL_IN);
+}
+
+
 static const struct file_operations sr04_fop_drv = {
 	.owner		= THIS_MODULE,
 	.read		= sr04_read,
@@ -205,6 +216,7 @@ static int sr04_init(void)
 	if(err){
 		printk("request_irq err!!!, %d", err);
 	}
+	setup_timer(&gpios_sr04[1].sr04_timer, sr04_timer_timeout_func, (unsigned long)&gpios_sr04[1]);
 
 	/* register file_operations */
 	major = register_chrdev(0, "sr04", &sr04_fop_drv);  /* create divce driver */
@@ -230,6 +242,7 @@ static void sr04_exit(void)
 	/* relase pin */
 	gpio_free(gpios_sr04[0].gpio);
 	free_irq(gpios_sr04[1].irq, &gpios_sr04[1]);
+	del_timer(&gpios_sr04[1].sr04_timer);
 }
 
 module_init(sr04_init)
