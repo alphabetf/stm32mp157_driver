@@ -127,18 +127,18 @@ static void parse_dht11_datas(void)
 	}
 	/* CRC */
 	crc = datas[0] + datas[1] + datas[2] + datas[3];
-//	if (crc == datas[4]){
+	if (crc == datas[4]){
 		put_key(datas[0]);
 		put_key(datas[1]);
 		put_key(datas[2]);
 		put_key(datas[3]);
 	
-//	}else{
-//		put_key(-1);
-//		put_key(-1);
-//		put_key(-1);
-//		put_key(-1);
-//	}
+	}else{
+		put_key(-1);
+		put_key(-1);
+		put_key(-1);
+		put_key(-1);
+	}
 
 	g_dht11_irq_cnt = 0;
 	wake_up_interruptible(&dht11_wait);
@@ -149,7 +149,7 @@ static irqreturn_t dht11_isr(int irq, void *dev_id) /* interrupt handler */
 	struct dht11_desc *gpio_desc = dev_id;
 	u64 time;
 
-	printk("%s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
+	//printk("%s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
 
 	time = ktime_get_ns();
 	g_dht11_irq_time[g_dht11_irq_cnt] = time;
@@ -167,7 +167,7 @@ ssize_t dht11_drv_read (struct file *file, char __user *buf, size_t size, loff_t
 	int err;
 	char kern_buf[4];
 
-	printk("%s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
+	//printk("%s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
 
 	if (size != 4)
 		return -EINVAL;
@@ -191,6 +191,9 @@ ssize_t dht11_drv_read (struct file *file, char __user *buf, size_t size, loff_t
 	mod_timer(&gpio_dht11[0].key_timer, jiffies + 10);	
 	/* 3. 休眠等待数据 */
 	wait_event_interruptible(dht11_wait, !is_key_buf_empty());
+
+	printk("%s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
+
 	free_irq(gpio_dht11[0].irq, &gpio_dht11[0]);	
 
 	/* 设置DHT11 GPIO引脚的初始状态: output 1 */
@@ -222,12 +225,30 @@ static void dht11_timer_expire(struct timer_list *t)
 	printk("%s %s %d, dht11_timer_expire err\n", __FILE__, __FUNCTION__, __LINE__);
 	parse_dht11_datas();
 }
+int dht11_release(struct inode * devi, struct file * fd)
+{
+ 	int err;
+
+	printk("%s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
+
+/*	free_irq(gpio_dht11[0].irq, &gpio_dht11[0]);	
+
+	err = gpio_request(gpio_dht11[0].gpio, gpio_dht11[0].name);
+	if (err){
+		printk("%s %s %d, gpio_request err\n", __FILE__, __FUNCTION__, __LINE__);
+	}
+	gpio_direction_output(gpio_dht11[0].gpio, 1);
+	gpio_free(gpio_dht11[0].gpio); 
+*/
+
+	return 0;
+}
 
 static struct file_operations gpio_dht11_drv_fops = {
 	.owner 	 = THIS_MODULE,
 	.read    = dht11_drv_read,
+	.release = dht11_release,
 };
-
 /* entry */
 static int __init dht11_drv_init(void)
 {
@@ -239,18 +260,18 @@ static int __init dht11_drv_init(void)
 
 	for(i = 0; i < count; i++){ /* set the GPIO */	
 		gpio_dht11[i].irq  = gpio_to_irq(gpio_dht11[i].gpio); /* get the gpio irq */
-		/*err = gpio_request(gpio_dht11[i].gpio, gpio_dht11[i].name);
+		err = gpio_request(gpio_dht11[i].gpio, gpio_dht11[i].name);
 		gpio_direction_output(gpio_dht11[i].gpio, 1);
 		gpio_free(gpio_dht11[i].gpio);
 		timer_setup(&gpio_dht11[i].key_timer, dht11_timer_expire, 0);
 		gpio_dht11[i].key_timer.expires = ~0;
 		add_timer(&gpio_dht11[i].key_timer);
 
-		gpio_direction_input(gpio_dht11[i].gpio);  */
+		/* gpio_direction_input(gpio_dht11[i].gpio); 
 		err = request_irq(gpio_dht11[i].irq, dht11_isr, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, gpio_dht11[i].name, &gpio_dht11[i]);
 		if (err){
 			printk("%s %s %d, gpio_request err\n", __FILE__, __FUNCTION__, __LINE__);
-		}
+		} */
 	}
 
     /* register file operator */

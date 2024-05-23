@@ -39,7 +39,7 @@ int main(int argc, char **argv)
 		}else{
 			printf("get dht11: -1\n");
 		}
-		sleep(5);
+		sleep(2);
 	}
 
 	close(fd);
